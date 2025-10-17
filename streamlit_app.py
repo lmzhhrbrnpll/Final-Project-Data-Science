@@ -14,7 +14,7 @@ st.set_page_config(
 @st.cache_data
 def load_data():
     """Loads the travel tickets dataset."""
-    df = pd.read_csv("EDA_cleaned.csv")
+    df = pd.read_csv('EDA_cleaned.csv')
     
     # Convert date columns to datetime
     df['Created'] = pd.to_datetime(df['Created'])
