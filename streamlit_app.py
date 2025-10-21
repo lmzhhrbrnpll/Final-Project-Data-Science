@@ -9,14 +9,13 @@ Original file is located at
 
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-from datetime import datetime
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
-    page_title="Travel Ticket Analysis",
-    page_icon="✈️",
+    page_title="Customer Churn Analysis",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -24,99 +23,103 @@ st.set_page_config(
 # --- DATA LOADING ---
 @st.cache_data
 def load_data():
-    """Loads the travel tickets dataset."""
-    df = pd.read_csv("EDA_cleaned.csv")
-
-    # Convert date columns to datetime
-    df['Created'] = pd.to_datetime(df['Created'])
-    df['DepartureTime'] = pd.to_datetime(df['DepartureTime'])
-
-    # Calculate days until departure
-    df['DaysUntilDeparture'] = (df['DepartureTime'] - df['Created']).dt.days
-
-    # Create price categories
-    df['PriceCategory'] = pd.cut(df['Price'],
-                               bins=[0, 1000000, 5000000, 10000000, float('inf')],
-                               labels=['<1M', '1M-5M', '5M-10M', '>10M'])
-
+    """Loads the customer churn dataset."""
+    df = pd.read_csv("Data/EDA_cleaned.csv")
     return df
 
 df = load_data()
 
 # --- APP TITLE AND DESCRIPTION ---
-st.title("✈️ Travel Tickets Data Analysis")
+st.title("📊 Customer Churn Analysis Dashboard")
 st.markdown("""
-This application performs exploratory data analysis (EDA) on the Travel Tickets dataset.
-Use the filters in the sidebar to explore different aspects of ticket sales and customer behavior.
+This application performs exploratory data analysis (EDA) on the Customer Churn dataset.
+Use the filters in the sidebar to explore customer behavior and churn patterns.
 """)
 
 # --- SIDEBAR FOR FILTERS ---
-st.sidebar.header("Filter Your Data")
+st.sidebar.header("Filter Customers")
 
-# Filter for vehicle type
-vehicle_types = st.sidebar.multiselect(
-    "Select Vehicle Type",
-    options=df["Vehicle"].unique(),
-    default=df["Vehicle"].unique()
+# Filter for Churn status
+churn_status = st.sidebar.multiselect(
+    "Select Churn Status",
+    options=df["Churn"].unique(),
+    default=df["Churn"].unique()
 )
 
-# Filter for trip reason
-trip_reasons = st.sidebar.multiselect(
-    "Select Trip Reason",
-    options=df["TripReason"].unique(),
-    default=df["TripReason"].unique()
+# Filter for City Tier
+city_tier = st.sidebar.multiselect(
+    "Select City Tier",
+    options=df["CityTier"].unique(),
+    default=df["CityTier"].unique()
 )
 
-# Filter for domestic/international
-domestic_filter = st.sidebar.multiselect(
-    "Select Trip Type",
-    options=df["Domestic"].unique(),
-    default=df["Domestic"].unique()
-)
-
-# Filter for cancellation status
-cancel_filter = st.sidebar.multiselect(
-    "Select Cancel Status",
-    options=df["Cancel"].unique(),
-    default=df["Cancel"].unique()
-)
-
-# Filter for price range
-min_price, max_price = int(df["Price"].min()), int(df["Price"].max())
-price_range = st.sidebar.slider(
-    "Select Price Range",
-    min_value=min_price,
-    max_value=max_price,
-    value=(min_price, max_price),
-)
-
-# Filter for gender
-gender_filter = st.sidebar.multiselect(
+# Filter for Gender
+gender = st.sidebar.multiselect(
     "Select Gender",
-    options=["Male" if x == 1 else "Female" for x in df["Male"].unique()],
-    default=["Male" if x == 1 else "Female" for x in df["Male"].unique()]
+    options=df["Gender"].unique(),
+    default=df["Gender"].unique()
+)
+
+# Filter for Preferred Login Device
+login_device = st.sidebar.multiselect(
+    "Select Preferred Login Device",
+    options=df["PreferredLoginDevice"].unique(),
+    default=df["PreferredLoginDevice"].unique()
+)
+
+# Filter for Preferred Payment Mode
+payment_mode = st.sidebar.multiselect(
+    "Select Preferred Payment Mode",
+    options=df["PreferredPaymentMode"].unique(),
+    default=df["PreferredPaymentMode"].unique()
+)
+
+# Filter for Preferred Order Category
+order_cat = st.sidebar.multiselect(
+    "Select Preferred Order Category",
+    options=df["PreferedOrderCat"].unique(),
+    default=df["PreferedOrderCat"].unique()
+)
+
+# Filter for Tenure range
+min_tenure, max_tenure = int(df["Tenure"].min()), int(df["Tenure"].max())
+tenure_slider = st.sidebar.slider(
+    "Select Tenure Range",
+    min_value=min_tenure,
+    max_value=max_tenure,
+    value=(min_tenure, max_tenure),
+)
+
+# Filter for Satisfaction Score
+satisfaction = st.sidebar.multiselect(
+    "Select Satisfaction Score",
+    options=df["SatisfactionScore"].unique(),
+    default=df["SatisfactionScore"].unique()
 )
 
 # --- FILTERING THE DATAFRAME ---
 df_selection = df.copy()
 
-# Apply filters
-if vehicle_types:
-    df_selection = df_selection[df_selection["Vehicle"].isin(vehicle_types)]
-if trip_reasons:
-    df_selection = df_selection[df_selection["TripReason"].isin(trip_reasons)]
-if domestic_filter:
-    df_selection = df_selection[df_selection["Domestic"].isin(domestic_filter)]
-if cancel_filter:
-    df_selection = df_selection[df_selection["Cancel"].isin(cancel_filter)]
-if gender_filter:
-    gender_numeric = [1 if x == "Male" else 0 for x in gender_filter]
-    df_selection = df_selection[df_selection["Male"].isin(gender_numeric)]
+# Apply multiselect filters only if a selection has been made for that filter
+if churn_status:
+    df_selection = df_selection[df_selection["Churn"].isin(churn_status)]
+if city_tier:
+    df_selection = df_selection[df_selection["CityTier"].isin(city_tier)]
+if gender:
+    df_selection = df_selection[df_selection["Gender"].isin(gender)]
+if login_device:
+    df_selection = df_selection[df_selection["PreferredLoginDevice"].isin(login_device)]
+if payment_mode:
+    df_selection = df_selection[df_selection["PreferredPaymentMode"].isin(payment_mode)]
+if order_cat:
+    df_selection = df_selection[df_selection["PreferedOrderCat"].isin(order_cat)]
+if satisfaction:
+    df_selection = df_selection[df_selection["SatisfactionScore"].isin(satisfaction)]
 
-# Apply price filter
+# Apply slider filter
 df_selection = df_selection[
-    (df_selection["Price"] >= price_range[0]) &
-    (df_selection["Price"] <= price_range[1])
+    (df_selection["Tenure"] >= tenure_slider[0]) &
+    (df_selection["Tenure"] <= tenure_slider[1])
 ]
 
 # Display error message if no data is selected
@@ -125,94 +128,97 @@ if df_selection.empty:
     st.stop()
 
 # --- MAIN PAGE CONTENT ---
-st.subheader("📊 Key Metrics")
+st.subheader("📈 Key Metrics")
 
 # --- DISPLAY KEY METRICS ---
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    total_tickets = df_selection.shape[0]
-    st.metric(label="Total Tickets", value=f"{total_tickets:,}")
+    total_customers = df_selection.shape[0]
+    st.metric(label="Total Customers", value=total_customers)
 
 with col2:
-    avg_price = round(df_selection["Price"].mean(), 2)
-    st.metric(label="Average Price", value=f"${avg_price:,.2f}")
+    churn_rate = (df_selection["Churn"].sum() / total_customers) * 100
+    st.metric(label="Churn Rate", value=f"{churn_rate:.1f}%")
 
 with col3:
-    cancellation_rate = (df_selection["Cancel"].sum() / len(df_selection)) * 100
-    st.metric(label="Cancellation Rate", value=f"{cancellation_rate:.1f}%")
+    avg_tenure = round(df_selection["Tenure"].mean(), 1)
+    st.metric(label="Average Tenure", value=avg_tenure)
 
 with col4:
-    avg_discount = round(df_selection["CouponDiscount"].mean(), 2)
-    st.metric(label="Average Discount", value=f"${avg_discount:,.2f}")
+    avg_cashback = round(df_selection["CashbackAmount"].mean(), 1)
+    st.metric(label="Avg. Cashback Amount", value=f"${avg_cashback:.2f}")
 
 st.markdown("---")
 
 # --- VISUALIZATIONS ---
-st.subheader("📈 Visualizations")
+st.subheader("📊 Visualizations")
 
 # Arrange charts in columns
 viz_col1, viz_col2 = st.columns(2)
 
 with viz_col1:
-    # Price distribution by vehicle type
-    st.subheader("Price Distribution by Vehicle Type")
-    fig1 = px.box(df_selection, x="Vehicle", y="Price", color="Vehicle")
-    fig1.update_layout(height=400)
-    st.plotly_chart(fig1, use_container_width=True)
+    # Churn distribution
+    st.subheader("Churn Distribution")
+    churn_counts = df_selection["Churn"].value_counts()
+    fig, ax = plt.subplots(figsize=(8, 6))
+    colors = ['#ff6b6b', '#51cf66']
+    ax.pie(churn_counts.values, labels=['Not Churned', 'Churned'], autopct='%1.1f%%',
+           colors=colors, startangle=90)
+    ax.set_title('Customer Churn Distribution')
+    st.pyplot(fig)
 
 with viz_col2:
-    # Ticket count by vehicle type
-    st.subheader("Ticket Count by Vehicle Type")
-    vehicle_counts = df_selection["Vehicle"].value_counts()
-    fig2 = px.pie(values=vehicle_counts.values, names=vehicle_counts.index)
-    fig2.update_layout(height=400)
-    st.plotly_chart(fig2, use_container_width=True)
+    # Average Cashback by Churn Status
+    st.subheader("Avg. Cashback by Churn Status")
+    avg_cashback_by_churn = df_selection.groupby('Churn')['CashbackAmount'].mean()
+    st.bar_chart(avg_cashback_by_churn)
 
 # Second row of visualizations
 viz_col3, viz_col4 = st.columns(2)
 
 with viz_col3:
-    # Average price by trip reason
-    st.subheader("Average Price by Trip Reason")
-    avg_price_reason = df_selection.groupby("TripReason")["Price"].mean().reset_index()
-    fig3 = px.bar(avg_price_reason, x="TripReason", y="Price", color="TripReason")
-    fig3.update_layout(height=400)
-    st.plotly_chart(fig3, use_container_width=True)
+    # Satisfaction Score Distribution
+    st.subheader("Satisfaction Score Distribution")
+    satisfaction_counts = df_selection["SatisfactionScore"].value_counts().sort_index()
+    st.bar_chart(satisfaction_counts)
 
 with viz_col4:
-    # Cancellation rate by vehicle type
-    st.subheader("Cancellation Rate by Vehicle Type")
-    cancel_by_vehicle = df_selection.groupby("Vehicle")["Cancel"].mean() * 100
-    fig4 = px.bar(x=cancel_by_vehicle.index, y=cancel_by_vehicle.values)
-    fig4.update_layout(xaxis_title="Vehicle", yaxis_title="Cancellation Rate (%)", height=400)
-    st.plotly_chart(fig4, use_container_width=True)
+    # Tenure Distribution
+    st.subheader("Tenure Distribution")
+    tenure_hist = df_selection["Tenure"].value_counts().sort_index()
+    st.line_chart(tenure_hist)
 
-# Third row - Time series analysis
-st.subheader("📅 Time Series Analysis")
-time_col1, time_col2 = st.columns(2)
+# Third row of visualizations
+viz_col5, viz_col6 = st.columns(2)
 
-with time_col1:
-    # Tickets by creation month
-    st.subheader("Tickets by Creation Month")
-    df_selection['CreatedMonth'] = df_selection['Created'].dt.to_period('M').astype(str)
-    monthly_tickets = df_selection.groupby('CreatedMonth').size().reset_index(name='Count')
-    fig5 = px.line(monthly_tickets, x='CreatedMonth', y='Count')
-    fig5.update_layout(height=400)
-    st.plotly_chart(fig5, use_container_width=True)
+with viz_col5:
+    # Preferred Payment Mode
+    st.subheader("Preferred Payment Mode")
+    payment_counts = df_selection["PreferredPaymentMode"].value_counts()
+    st.bar_chart(payment_counts)
 
-with time_col2:
-    # Average days until departure by vehicle type
-    st.subheader("Average Days Until Departure")
-    avg_days = df_selection.groupby("Vehicle")["DaysUntilDeparture"].mean().reset_index()
-    fig6 = px.bar(avg_days, x="Vehicle", y="DaysUntilDeparture", color="Vehicle")
-    fig6.update_layout(height=400)
-    st.plotly_chart(fig6, use_container_width=True)
+with viz_col6:
+    # City Tier Distribution
+    st.subheader("City Tier Distribution")
+    city_counts = df_selection["CityTier"].value_counts().sort_index()
+    st.bar_chart(city_counts)
+
+# Scatter plot for numerical relationship
+st.subheader("Tenure vs Cashback Amount")
+scatter_data = df_selection[['Tenure', 'CashbackAmount', 'Churn']]
+scatter_data['Churn'] = scatter_data['Churn'].map({0: 'Not Churned', 1: 'Churned'})
+st.scatter_chart(
+    data=scatter_data,
+    x='Tenure',
+    y='CashbackAmount',
+    color='Churn'
+)
 
 # --- DISPLAY RAW DATA ---
-with st.expander("View Raw Data"):
+with st.expander("View Filtered Data"):
     st.dataframe(df_selection)
     st.markdown(f"**Data Dimensions:** {df_selection.shape[0]} rows, {df_selection.shape[1]} columns")
 
 st.markdown("---")
-st.write("Data Source: Travel Tickets Dataset")
+st.write("Customer Churn Analysis Dashboard - EDA Tool")
