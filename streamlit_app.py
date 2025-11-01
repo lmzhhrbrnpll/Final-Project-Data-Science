@@ -244,5 +244,4 @@ with st.expander("View Filtered Data"):
     st.dataframe(df_selection)
     st.markdown(f"**Data Dimensions:** {df_selection.shape[0]} rows, {df_selection.shape[1]} columns")
 
-st.markdown("---")
-st.write("Customer Churn Analysis Dashboard - EDA Tool")
+
