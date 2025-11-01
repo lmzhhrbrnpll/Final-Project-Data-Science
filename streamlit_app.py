@@ -120,7 +120,7 @@ if df_selection.empty:
 st.subheader("📈 Key Metrics")
 
 # --- DISPLAY KEY METRICS ---
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3 = st.columns(3)
 
 with col1:
     total_customers = df_selection.shape[0]
@@ -133,27 +133,20 @@ with col2:
 with col3:
     avg_tenure = round(df_selection["Tenure"].mean(), 1)
     st.metric(label="Average Tenure", value=avg_tenure)
-
-with col4:
-    avg_cashback = round(df_selection["CashbackAmount"].mean(), 1)
-    st.metric(label="Avg. Cashback Amount", value=f"${avg_cashback:.2f}")
+    
 
 # Additional metrics
-col5, col6, col7, col8 = st.columns(4)
+col4, col5, col6 = st.columns(3)
 
-with col5:
+with col4:
     avg_order_count = round(df_selection["OrderCount"].mean(), 1)
     st.metric(label="Avg. Order Count", value=avg_order_count)
 
-with col6:
-    avg_coupon_used = round(df_selection["CouponUsed"].mean(), 1)
-    st.metric(label="Avg. Coupon Used", value=avg_coupon_used)
-
-with col7:
+with col5:
     complain_rate = (df_selection["Complain"].sum() / total_customers) * 100
     st.metric(label="Complain Rate", value=f"{complain_rate:.1f}%")
 
-with col8:
+with col6:
     avg_hours_app = round(df_selection["HourSpendOnApp"].mean(), 1)
     st.metric(label="Avg. Hours on App", value=avg_hours_app)
 
@@ -227,33 +220,12 @@ with viz_col8:
     gender_counts = df_selection["Gender"].value_counts()
     st.bar_chart(gender_counts)
 
-# Scatter plot for numerical relationship
-st.subheader("Tenure vs Cashback Amount")
-scatter_data = df_selection[['Tenure', 'CashbackAmount', 'Churn']]
-scatter_data['Churn'] = scatter_data['Churn'].map({0: 'Not Churned', 1: 'Churned'})
-st.scatter_chart(
-    data=scatter_data,
-    x='Tenure',
-    y='CashbackAmount',
-    color='Churn'
-)
-
-# Additional scatter plot
-st.subheader("Order Count vs Cashback Amount")
-scatter_data2 = df_selection[['OrderCount', 'CashbackAmount', 'Churn']]
-scatter_data2['Churn'] = scatter_data2['Churn'].map({0: 'Not Churned', 1: 'Churned'})
-st.scatter_chart(
-    data=scatter_data2,
-    x='OrderCount',
-    y='CashbackAmount',
-    color='Churn'
-)
 
 # --- DATA SUMMARY ---
 st.subheader("📋 Data Summary")
 
 # Display some statistics
-col9, col10, col11 = st.columns(3)
+col9, col10 = st.columns(2)
 
 with col9:
     st.write("**Churn Statistics:**")
@@ -262,21 +234,14 @@ with col9:
     st.write(f"- Churn Rate: {churn_rate:.2f}%")
 
 with col10:
-    st.write("**Order Statistics:**")
-    st.write(f"- Avg Orders per Customer: {avg_order_count}")
-    st.write(f"- Avg Coupons Used: {avg_coupon_used}")
-    st.write(f"- Customers with Complaints: {df_selection['Complain'].sum()}")
-
-with col11:
     st.write("**Engagement Statistics:**")
     st.write(f"- Avg Hours on App: {avg_hours_app}")
     st.write(f"- Avg Devices Registered: {df_selection['NumberOfDeviceRegistered'].mean():.1f}")
-    st.write(f"- Avg Addresses: {df_selection['NumberOfAddress'].mean():.1f}")
+    st.write(f"- Customers with Complaints: {df_selection['Complain'].sum()}")
 
 # --- DISPLAY RAW DATA ---
 with st.expander("View Filtered Data"):
     st.dataframe(df_selection)
     st.markdown(f"**Data Dimensions:** {df_selection.shape[0]} rows, {df_selection.shape[1]} columns")
 
-st.markdown("---")
-st.write("Customer Churn Analysis Dashboard - EDA Tool")
+
