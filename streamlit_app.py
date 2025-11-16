@@ -481,55 +481,84 @@ with tab2:
     Enter customer details below to predict churn probability.
     """)
     
-    # Get feature names for input
+    # Get feature names for input - HANYA NUMERIK
     feature_columns = X_train.columns.tolist()
+    
+    # Filter hanya kolom numerik untuk ditampilkan di form
+    numerical_features = [col for col in feature_columns if df[col].dtype in ['int64', 'float64'] and col != 'Churn']
+    
+    # Untuk kolom kategorik, kita akan gunakan nilai default (modus)
+    categorical_features = [col for col in feature_columns if df[col].dtype == 'object']
     
     # Create input form
     with st.form("prediction_form"):
-        st.write("### Customer Details")
+        st.write("### Customer Details (Numerical Features Only)")
         
-        # Create two columns for better layout
+        # Create columns for better layout
         col1, col2 = st.columns(2)
         
         input_data = {}
         
+        # Display only numerical features
         with col1:
-            for feature in feature_columns[:len(feature_columns)//2]:
+            for i, feature in enumerate(numerical_features[:len(numerical_features)//2]):
                 if df[feature].dtype in ['int64', 'float64']:
                     # Numerical features
                     min_val = float(df[feature].min())
                     max_val = float(df[feature].max())
                     default_val = float(df[feature].median())
+                    
+                    # Adjust ranges for better UX
+                    if feature == 'Tenure':
+                        min_val, max_val = 0, 60
+                        default_val = min(12, max_val)
+                    elif feature == 'CashbackAmount':
+                        min_val, max_val = 0, 1000
+                    elif feature == 'HourSpendOnApp':
+                        min_val, max_val = 0.0, 10.0
+                    elif feature == 'SatisfactionScore':
+                        min_val, max_val = 1, 5
+                    elif feature == 'OrderCount':
+                        min_val, max_val = 0, 100
+                    
                     input_data[feature] = st.slider(
                         f"{feature}", 
-                        min_val, max_val, default_val
-                    )
-                else:
-                    # Categorical features
-                    unique_vals = df[feature].unique()
-                    input_data[feature] = st.selectbox(
-                        f"{feature}", 
-                        options=unique_vals
+                        min_val, max_val, default_val,
+                        help=f"Data range: {df[feature].min():.1f} - {df[feature].max():.1f}"
                     )
         
         with col2:
-            for feature in feature_columns[len(feature_columns)//2:]:
+            for i, feature in enumerate(numerical_features[len(numerical_features)//2:]):
                 if df[feature].dtype in ['int64', 'float64']:
                     # Numerical features
                     min_val = float(df[feature].min())
                     max_val = float(df[feature].max())
                     default_val = float(df[feature].median())
+                    
+                    # Adjust ranges for better UX
+                    if feature == 'Tenure':
+                        min_val, max_val = 0, 60
+                        default_val = min(12, max_val)
+                    elif feature == 'CashbackAmount':
+                        min_val, max_val = 0, 1000
+                    elif feature == 'HourSpendOnApp':
+                        min_val, max_val = 0.0, 10.0
+                    elif feature == 'SatisfactionScore':
+                        min_val, max_val = 1, 5
+                    elif feature == 'OrderCount':
+                        min_val, max_val = 0, 100
+                    
                     input_data[feature] = st.slider(
                         f"{feature}", 
-                        min_val, max_val, default_val
+                        min_val, max_val, default_val,
+                        help=f"Data range: {df[feature].min():.1f} - {df[feature].max():.1f}"
                     )
-                else:
-                    # Categorical features
-                    unique_vals = df[feature].unique()
-                    input_data[feature] = st.selectbox(
-                        f"{feature}", 
-                        options=unique_vals
-                    )
+        
+        # Add categorical features with default values (not displayed to user)
+        for feature in categorical_features:
+            # Use mode as default value for categorical features
+            default_cat_value = df[feature].mode()[0] if len(df[feature].mode()) > 0 else df[feature].iloc[0]
+            input_data[feature] = default_cat_value
         
         submitted = st.form_submit_button("Predict Churn")
         
@@ -580,16 +609,40 @@ with tab2:
             st.progress(float(churn_probability))
             st.caption(f"Churn likelihood: {churn_probability*100:.1f}%")
             
+            # Feature contribution analysis
+            with st.expander("🔍 Feature Contribution Analysis"):
+                st.write("**Key Factors Influencing This Prediction:**")
+                
+                # Get feature importance for this specific prediction
+                feature_importance = best_model.feature_importances_
+                feature_names = X_train.columns
+                
+                # Create DataFrame for feature importance
+                importance_df = pd.DataFrame({
+                    'Feature': feature_names,
+                    'Importance': feature_importance
+                }).sort_values('Importance', ascending=False)
+                
+                # Show top 5 most important features
+                top_features = importance_df.head(5)
+                
+                for _, row in top_features.iterrows():
+                    feature_name = row['Feature']
+                    importance = row['Importance']
+                    user_value = input_data.get(feature_name, 'N/A')
+                    
+                    st.write(f"- **{feature_name}**: {user_value} (Impact: {importance:.3f})")
+            
             # Explanation
-            with st.expander("Understanding the Prediction"):
+            with st.expander("💡 Understanding the Prediction"):
                 st.write("""
-                - **Churn Probability**: The model's confidence that the customer will churn
+                - **Churn Probability**: The model's confidence that the customer will churn (0-1 scale)
                 - **Confidence**: The higher value between churn and non-churn probability
-                - **Recommendation**: 
-                  - For high-risk customers (>50% probability): Implement immediate retention strategies
-                  - For low-risk customers (<50% probability): Continue with standard engagement
+                - **Recommendations**: 
+                  - **High-risk** (>70% probability): Implement immediate retention strategies
+                  - **Medium-risk** (30-70% probability): Monitor closely and engage proactively
+                  - **Low-risk** (<30% probability): Continue with standard engagement
                 """)
-
 
     # Confusion Matrix
     st.subheader("📈 Confusion Matrix")
@@ -652,10 +705,27 @@ with tab3:
         st.subheader("Basic Statistics")
         st.dataframe(df.describe())
     
-    # --- DISPLAY RAW DATA ---
-        with st.expander("View Data"):
-            st.dataframe(df_selection)
-            st.markdown(f"**Data Dimensions:** {df_selection.shape[0]} rows, {df_selection.shape[1]} columns")
+    # Missing values
+    st.subheader("Missing Values")
+    missing_data = pd.DataFrame({
+        'Column': df.columns,
+        'Missing Values': df.isnull().sum(),
+        'Missing Percentage': (df.isnull().sum() / len(df)) * 100
+    })
+    st.dataframe(missing_data)
+    
+    # Column information
+    st.subheader("Column Information")
+    for col in df.columns:
+        with st.expander(f"Column: {col}"):
+            st.write(f"**Data Type:** {df[col].dtype}")
+            st.write(f"**Unique Values:** {df[col].nunique()}")
+            if df[col].dtype == 'object' or df[col].nunique() < 10:
+                st.write("**Value Counts:**")
+                st.write(df[col].value_counts())
+            else:
+                st.write("**Sample Values:**")
+                st.write(df[col].head(10).tolist())
             
 st.markdown("---")
 st.write("Customer Churn Analysis & Prediction Dashboard")
