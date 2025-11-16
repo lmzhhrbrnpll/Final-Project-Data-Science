@@ -424,7 +424,6 @@ with tab2:
     st.header("🤖 Customer Churn Prediction Model")
     st.markdown("""
     This section uses a tuned Random Forest classifier to predict customer churn.
-    The model follows the same preprocessing and training approach as the Google Colab notebook.
     """)
     
     # Preprocess data for ML
@@ -474,52 +473,7 @@ with tab2:
     
     with col8:
         st.metric("Features", X_train.shape[1])
-    
-    # Display best parameters
-    st.subheader("🎯 Best Hyperparameters")
-    st.json(best_params)
-    
-    # Confusion Matrix
-    st.subheader("📈 Confusion Matrix")
-    if matplotlib_available:
-        fig, ax = plt.subplots(figsize=(8, 6))
-        cm = confusion_matrix(y_test, y_pred)
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax, 
-                    xticklabels=['Not Churn', 'Churn'],
-                    yticklabels=['Not Churn', 'Churn'])
-        ax.set_xlabel('Predicted')
-        ax.set_ylabel('Actual')
-        ax.set_title('Confusion Matrix')
-        st.pyplot(fig)
-    else:
-        # Fallback: display confusion matrix as table
-        cm = confusion_matrix(y_test, y_pred)
-        cm_df = pd.DataFrame(cm, 
-                           index=['Actual Not Churn', 'Actual Churn'],
-                           columns=['Predicted Not Churn', 'Predicted Churn'])
-        st.dataframe(cm_df)
-    
-    # Feature Importance
-    st.subheader("🔍 Feature Importance")
-    feature_importance = pd.DataFrame({
-        'feature': X_train.columns,
-        'importance': best_model.feature_importances_
-    }).sort_values('importance', ascending=False)
-    
-    if matplotlib_available:
-        fig, ax = plt.subplots(figsize=(10, 8))
-        sns.barplot(data=feature_importance.head(10), x='importance', y='feature', ax=ax)
-        ax.set_title('Top 10 Feature Importance')
-        ax.set_xlabel('Importance Score')
-        st.pyplot(fig)
-    else:
-        # Fallback: display as bar chart using streamlit
-        st.bar_chart(feature_importance.head(10).set_index('feature'))
-    
-    # Display feature importance table
-    with st.expander("View All Feature Importance"):
-        st.dataframe(feature_importance)
-    
+
     # --- PREDICTION INTERFACE ---
     st.subheader("🎯 Make Predictions")
     
@@ -636,6 +590,54 @@ with tab2:
                   - For low-risk customers (<50% probability): Continue with standard engagement
                 """)
 
+
+    
+    # Display best parameters
+    st.subheader("🎯 Best Hyperparameters")
+    st.json(best_params)
+    
+    # Confusion Matrix
+    st.subheader("📈 Confusion Matrix")
+    if matplotlib_available:
+        fig, ax = plt.subplots(figsize=(8, 6))
+        cm = confusion_matrix(y_test, y_pred)
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax, 
+                    xticklabels=['Not Churn', 'Churn'],
+                    yticklabels=['Not Churn', 'Churn'])
+        ax.set_xlabel('Predicted')
+        ax.set_ylabel('Actual')
+        ax.set_title('Confusion Matrix')
+        st.pyplot(fig)
+    else:
+        # Fallback: display confusion matrix as table
+        cm = confusion_matrix(y_test, y_pred)
+        cm_df = pd.DataFrame(cm, 
+                           index=['Actual Not Churn', 'Actual Churn'],
+                           columns=['Predicted Not Churn', 'Predicted Churn'])
+        st.dataframe(cm_df)
+    
+    # Feature Importance
+    st.subheader("🔍 Feature Importance")
+    feature_importance = pd.DataFrame({
+        'feature': X_train.columns,
+        'importance': best_model.feature_importances_
+    }).sort_values('importance', ascending=False)
+    
+    if matplotlib_available:
+        fig, ax = plt.subplots(figsize=(10, 8))
+        sns.barplot(data=feature_importance.head(10), x='importance', y='feature', ax=ax)
+        ax.set_title('Top 10 Feature Importance')
+        ax.set_xlabel('Importance Score')
+        st.pyplot(fig)
+    else:
+        # Fallback: display as bar chart using streamlit
+        st.bar_chart(feature_importance.head(10).set_index('feature'))
+    
+    # Display feature importance table
+    with st.expander("View All Feature Importance"):
+        st.dataframe(feature_importance)
+    
+    
 with tab3:
     # --- DATA OVERVIEW TAB ---
     st.header("🔍 Data Overview")
@@ -655,27 +657,6 @@ with tab3:
         st.subheader("Basic Statistics")
         st.dataframe(df.describe())
     
-    # Missing values
-    st.subheader("Missing Values")
-    missing_data = pd.DataFrame({
-        'Column': df.columns,
-        'Missing Values': df.isnull().sum(),
-        'Missing Percentage': (df.isnull().sum() / len(df)) * 100
-    })
-    st.dataframe(missing_data)
     
-    # Column information
-    st.subheader("Column Information")
-    for col in df.columns:
-        with st.expander(f"Column: {col}"):
-            st.write(f"**Data Type:** {df[col].dtype}")
-            st.write(f"**Unique Values:** {df[col].nunique()}")
-            if df[col].dtype == 'object' or df[col].nunique() < 10:
-                st.write("**Value Counts:**")
-                st.write(df[col].value_counts())
-            else:
-                st.write("**Sample Values:**")
-                st.write(df[col].head(10).tolist())
-
 st.markdown("---")
-st.write("Customer Churn Analysis & Prediction Dashboard - Based on Google Colab Implementation")
+st.write("Customer Churn Analysis & Prediction Dashboard")
