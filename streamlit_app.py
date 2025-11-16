@@ -508,6 +508,10 @@ with tab2:
                     max_val = float(df[feature].max())
                     default_val = float(df[feature].median())
                     
+                    # Ensure min_val != max_val for slider
+                    if min_val == max_val:
+                        max_val = min_val + 1
+                    
                     # Adjust ranges for better UX
                     if feature == 'Tenure':
                         min_val, max_val = 0, 60
@@ -522,8 +526,10 @@ with tab2:
                         min_val, max_val = 0, 100
                     
                     input_data[feature] = st.slider(
-                        f"{feature}", 
-                        min_val, max_val, default_val,
+                        label=f"{feature}", 
+                        min_value=min_val,
+                        max_value=max_val,
+                        value=default_val,
                         help=f"Data range: {df[feature].min():.1f} - {df[feature].max():.1f}"
                     )
         
@@ -535,6 +541,10 @@ with tab2:
                     max_val = float(df[feature].max())
                     default_val = float(df[feature].median())
                     
+                    # Ensure min_val != max_val for slider
+                    if min_val == max_val:
+                        max_val = min_val + 1
+                    
                     # Adjust ranges for better UX
                     if feature == 'Tenure':
                         min_val, max_val = 0, 60
@@ -549,8 +559,10 @@ with tab2:
                         min_val, max_val = 0, 100
                     
                     input_data[feature] = st.slider(
-                        f"{feature}", 
-                        min_val, max_val, default_val,
+                        label=f"{feature}", 
+                        min_value=min_val,
+                        max_value=max_val,
+                        value=default_val,
                         help=f"Data range: {df[feature].min():.1f} - {df[feature].max():.1f}"
                     )
         
@@ -560,6 +572,7 @@ with tab2:
             default_cat_value = df[feature].mode()[0] if len(df[feature].mode()) > 0 else df[feature].iloc[0]
             input_data[feature] = default_cat_value
         
+        # Submit button - HARUS di dalam form
         submitted = st.form_submit_button("Predict Churn")
         
         if submitted:
