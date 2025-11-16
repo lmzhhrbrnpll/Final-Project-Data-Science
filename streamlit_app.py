@@ -2,10 +2,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split, GridSearchCV
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.metrics import accuracy_score, roc_auc_score, precision_score, recall_score, f1_score, confusion_matrix
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -45,7 +41,6 @@ def load_data():
         n_samples = 1000
         
         sample_data = {
-            'CustomerID': range(1, n_samples + 1),
             'Tenure': np.random.randint(1, 36, n_samples),
             'OrderCount': np.random.randint(1, 50, n_samples),
             'CashbackAmount': np.random.uniform(50, 500, n_samples),
@@ -74,130 +69,53 @@ def load_data():
 # Load data
 df = load_data()
 
-# --- DATA FOR EDA (with important filters only) ---
-df_eda = df.copy()
+# --- SIMPLE PREPROCESSING ---
+def simple_encoder(df, column):
+    """Simple encoding for categorical variables without sklearn"""
+    if column in df.columns and df[column].dtype == 'object':
+        unique_vals = df[column].unique()
+        mapping = {val: idx for idx, val in enumerate(unique_vals)}
+        return df[column].map(mapping), mapping
+    return df[column], None
 
-# --- DATA FOR PREDICTION (all features) ---
-@st.cache_data
-def prepare_prediction_data(df):
-    """Prepare data for prediction model with all features."""
-    df_pred = df.copy()
+def calculate_risk_score(input_values, df):
+    """Calculate churn risk score based on input values and data patterns"""
+    risk_score = 0
+    max_possible_score = 0
     
-    # Remove CustomerID if exists
-    if 'CustomerID' in df_pred.columns:
-        df_pred = df_pred.drop('CustomerID', axis=1)
+    # Define risk factors and their weights
+    risk_factors = {
+        'Tenure': {'weight': 0.2, 'risk_func': lambda x, df: 1 if x < df['Tenure'].quantile(0.25) else 0},
+        'SatisfactionScore': {'weight': 0.15, 'risk_func': lambda x, df: 1 if x <= 2 else 0},
+        'Complain': {'weight': 0.25, 'risk_func': lambda x, df: x},  # 1 if has complaint
+        'CashbackAmount': {'weight': 0.1, 'risk_func': lambda x, df: 1 if x < df['CashbackAmount'].quantile(0.25) else 0},
+        'OrderCount': {'weight': 0.1, 'risk_func': lambda x, df: 1 if x < df['OrderCount'].quantile(0.25) else 0},
+        'HourSpendOnApp': {'weight': 0.1, 'risk_func': lambda x, df: 1 if x < df['HourSpendOnApp'].quantile(0.25) else 0},
+    }
     
-    # Handle missing values
-    numeric_columns = df_pred.select_dtypes(include=[np.number]).columns
-    categorical_columns = df_pred.select_dtypes(include=['object']).columns
+    # Calculate risk for each factor
+    for factor, config in risk_factors.items():
+        if factor in input_values:
+            risk_value = config['risk_func'](input_values[factor], df)
+            risk_score += risk_value * config['weight']
+            max_possible_score += config['weight']
     
-    # Fill numerical missing values with median
-    for col in numeric_columns:
-        if df_pred[col].isnull().sum() > 0:
-            df_pred[col].fillna(df_pred[col].median(), inplace=True)
-    
-    # Fill categorical missing values with mode
-    for col in categorical_columns:
-        if df_pred[col].isnull().sum() > 0:
-            df_pred[col].fillna(df_pred[col].mode()[0], inplace=True)
-    
-    return df_pred
-
-df_pred = prepare_prediction_data(df)
-
-# --- MODEL TRAINING FUNCTION ---
-@st.cache_resource
-def train_churn_model(df_pred):
-    """Train Random Forest model for churn prediction."""
-    if df_pred is None or 'Churn' not in df_pred.columns:
-        return None
-    
-    try:
-        # Encode categorical variables
-        df_ml = df_pred.copy()
-        categorical_cols = df_ml.select_dtypes(include=['object']).columns
-        label_encoders = {}
+    # Normalize score
+    if max_possible_score > 0:
+        normalized_score = risk_score / max_possible_score
+    else:
+        normalized_score = 0
         
-        for col in categorical_cols:
-            le = LabelEncoder()
-            df_ml[col] = le.fit_transform(df_ml[col].astype(str))
-            label_encoders[col] = le
-        
-        # Prepare features and target
-        X = df_ml.drop('Churn', axis=1)
-        y = df_ml['Churn']
-        
-        # Split the data
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42, stratify=y
-        )
-        
-        # Scale features
-        scaler = StandardScaler()
-        X_train_scaled = scaler.fit_transform(X_train)
-        X_test_scaled = scaler.transform(X_test)
-        
-        # Hyperparameter tuning
-        param_grid = {
-            'n_estimators': [100, 200],
-            'max_depth': [10, 15, None],
-            'min_samples_split': [2, 5],
-            'min_samples_leaf': [1, 2]
-        }
-        
-        rf = RandomForestClassifier(random_state=42, class_weight='balanced')
-        grid_search = GridSearchCV(
-            rf, param_grid, cv=3, scoring='roc_auc', n_jobs=-1, verbose=0
-        )
-        
-        grid_search.fit(X_train_scaled, y_train)
-        
-        best_model = grid_search.best_estimator_
-        
-        # Make predictions
-        y_pred = best_model.predict(X_test_scaled)
-        y_pred_proba = best_model.predict_proba(X_test_scaled)[:, 1]
-        
-        # Calculate metrics
-        accuracy = accuracy_score(y_test, y_pred)
-        precision = precision_score(y_test, y_pred, zero_division=0)
-        recall = recall_score(y_test, y_pred, zero_division=0)
-        f1 = f1_score(y_test, y_pred, zero_division=0)
-        auc_score = roc_auc_score(y_test, y_pred_proba)
-        
-        metrics = {
-            'accuracy': accuracy,
-            'precision': precision,
-            'recall': recall,
-            'f1_score': f1,
-            'auc_score': auc_score
-        }
-        
-        return {
-            'model': best_model,
-            'scaler': scaler,
-            'label_encoders': label_encoders,
-            'feature_names': X_train.columns.tolist(),
-            'metrics': metrics,
-            'best_params': grid_search.best_params_,
-            'X_test': X_test,
-            'y_test': y_test,
-            'y_pred': y_pred,
-            'y_pred_proba': y_pred_proba
-        }
-    
-    except Exception as e:
-        st.error(f"Error training model: {str(e)}")
-        return None
+    return min(normalized_score, 1.0)
 
 # --- MAIN APP ---
 st.title("📊 Customer Churn Analysis & Prediction Dashboard")
 
 # Create tabs
-tab1, tab2, tab3 = st.tabs(["📈 Exploratory Data Analysis", "🤖 Churn Prediction Model", "🔍 Data Overview"])
+tab1, tab2, tab3 = st.tabs(["📈 Exploratory Data Analysis", "🤖 Churn Prediction", "🔍 Data Overview"])
 
 with tab1:
-    if df_eda is not None and not df_eda.empty:
+    if df is not None and not df.empty:
         st.markdown("""
         ## Exploratory Data Analysis
         Explore customer behavior and churn patterns using the filters below.
@@ -210,17 +128,17 @@ with tab1:
         important_filters = []
         
         # Churn status (always important)
-        if 'Churn' in df_eda.columns:
+        if 'Churn' in df.columns:
             churn_status = st.sidebar.multiselect(
                 "Churn Status",
-                options=df_eda["Churn"].unique(),
-                default=df_eda["Churn"].unique()
+                options=df["Churn"].unique(),
+                default=df["Churn"].unique()
             )
             important_filters.append(('Churn', churn_status))
         
         # Tenure filter (important)
-        if 'Tenure' in df_eda.columns:
-            min_tenure, max_tenure = int(df_eda["Tenure"].min()), int(df_eda["Tenure"].max())
+        if 'Tenure' in df.columns:
+            min_tenure, max_tenure = int(df["Tenure"].min()), int(df["Tenure"].max())
             tenure_range = st.sidebar.slider(
                 "Tenure Range (months)",
                 min_tenure, max_tenure, (min_tenure, max_tenure)
@@ -228,34 +146,34 @@ with tab1:
             important_filters.append(('Tenure', tenure_range))
         
         # Satisfaction Score (important)
-        if 'SatisfactionScore' in df_eda.columns:
+        if 'SatisfactionScore' in df.columns:
             satisfaction_scores = st.sidebar.multiselect(
                 "Satisfaction Score",
-                options=sorted(df_eda["SatisfactionScore"].unique()),
-                default=sorted(df_eda["SatisfactionScore"].unique())
+                options=sorted(df["SatisfactionScore"].unique()),
+                default=sorted(df["SatisfactionScore"].unique())
             )
             important_filters.append(('SatisfactionScore', satisfaction_scores))
         
         # City Tier (important)
-        if 'CityTier' in df_eda.columns:
+        if 'CityTier' in df.columns:
             city_tiers = st.sidebar.multiselect(
                 "City Tier",
-                options=sorted(df_eda["CityTier"].unique()),
-                default=sorted(df_eda["CityTier"].unique())
+                options=sorted(df["CityTier"].unique()),
+                default=sorted(df["CityTier"].unique())
             )
             important_filters.append(('CityTier', city_tiers))
         
         # Complain status (important)
-        if 'Complain' in df_eda.columns:
+        if 'Complain' in df.columns:
             complain_status = st.sidebar.multiselect(
                 "Complain Status",
-                options=df_eda["Complain"].unique(),
-                default=df_eda["Complain"].unique()
+                options=df["Complain"].unique(),
+                default=df["Complain"].unique()
             )
             important_filters.append(('Complain', complain_status))
 
         # --- APPLY FILTERS ---
-        df_filtered = df_eda.copy()
+        df_filtered = df.copy()
         
         for col, filter_value in important_filters:
             if col in df_filtered.columns:
@@ -399,207 +317,242 @@ with tab1:
 
             # --- RAW DATA VIEW ---
             with st.expander("📄 View Filtered Data"):
-                st.dataframe(df_filtered, use_container_width=True)
+                st.dataframe(df_filtered.head(100), use_container_width=True)
                 st.write(f"**Data Dimensions:** {len(df_filtered)} rows, {len(df_filtered.columns)} columns")
+                st.write(f"*Showing first 100 rows*")
 
 with tab2:
     st.header("🤖 Churn Prediction Model")
     st.markdown("""
-    This section uses a **Random Forest Classifier** trained on all available features to predict customer churn.
+    ## Rule-based Churn Risk Assessment
+    This system calculates churn risk based on business rules and data patterns from your dataset.
     """)
     
-    if df_pred is not None and 'Churn' in df_pred.columns:
-        # Train or load model
-        with st.spinner("Training machine learning model..."):
-            model_result = train_churn_model(df_pred)
+    if df is not None and not df.empty:
+        st.success("✅ Risk assessment system ready!")
         
-        if model_result is not None:
-            st.success("✅ Model training completed!")
+        # Display data patterns
+        st.subheader("📊 Data Patterns Analysis")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if 'Churn' in df.columns:
+                churn_rate = (df['Churn'].sum() / len(df)) * 100
+                st.metric("Overall Churn Rate", f"{churn_rate:.1f}%")
+        
+        with col2:
+            if 'Tenure' in df.columns:
+                avg_tenure_churn = df[df['Churn'] == 1]['Tenure'].mean() if 1 in df['Churn'].values else 0
+                avg_tenure_no_churn = df[df['Churn'] == 0]['Tenure'].mean() if 0 in df['Churn'].values else 0
+                st.metric("Avg Tenure (Churn vs Non-Churn)", f"{avg_tenure_churn:.1f} vs {avg_tenure_no_churn:.1f}")
+        
+        with col3:
+            if 'Complain' in df.columns and 'Churn' in df.columns:
+                complain_churn_rate = (df[df['Complain'] == 1]['Churn'].mean() * 100) if 1 in df['Complain'].values else 0
+                st.metric("Churn Rate with Complaints", f"{complain_churn_rate:.1f}%")
+
+        # --- PREDICTION INTERFACE ---
+        st.markdown("---")
+        st.subheader("🎯 Churn Risk Assessment")
+        st.markdown("""
+        Enter customer details below to assess churn risk. **All available features are used** for comprehensive assessment.
+        """)
+        
+        with st.form("prediction_form"):
+            st.write("### Customer Information")
             
-            # Display model performance
-            st.subheader("📊 Model Performance")
+            # Organize inputs into columns
+            col1, col2, col3 = st.columns(3)
+            input_data = {}
             
-            metrics = model_result['metrics']
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Accuracy", f"{metrics['accuracy']:.3f}")
-            with col2:
-                st.metric("AUC Score", f"{metrics['auc_score']:.3f}")
-            with col3:
-                st.metric("Precision", f"{metrics['precision']:.3f}")
-            with col4:
-                st.metric("Recall", f"{metrics['recall']:.3f}")
+            # Get all column names except Churn
+            feature_columns = [col for col in df.columns if col != 'Churn']
             
-            # Additional metrics
-            col5, col6, col7, col8 = st.columns(4)
-            with col5:
-                st.metric("F1-Score", f"{metrics['f1_score']:.3f}")
-            with col6:
-                st.metric("Training Samples", len(df_pred) - len(model_result['X_test']))
-            with col7:
-                st.metric("Test Samples", len(model_result['X_test']))
-            with col8:
-                st.metric("Features Used", len(model_result['feature_names']))
-            
-            # Best parameters
-            with st.expander("🎯 View Best Hyperparameters"):
-                st.json(model_result['best_params'])
-            
-            # Confusion Matrix
-            st.subheader("📈 Confusion Matrix")
-            cm = confusion_matrix(model_result['y_test'], model_result['y_pred'])
-            cm_df = pd.DataFrame(
-                cm, 
-                index=['Actual Not Churn', 'Actual Churn'],
-                columns=['Predicted Not Churn', 'Predicted Churn']
-            )
-            st.dataframe(cm_df.style.background_gradient(cmap='Blues'), use_container_width=True)
-            
-            # Feature Importance
-            st.subheader("🔍 Feature Importance")
-            feature_importance = pd.DataFrame({
-                'Feature': model_result['feature_names'],
-                'Importance': model_result['model'].feature_importances_
-            }).sort_values('Importance', ascending=False)
-            
-            # Display top features
-            st.bar_chart(feature_importance.head(10).set_index('Feature'))
-            
-            with st.expander("📋 View All Feature Importances"):
-                st.dataframe(feature_importance, use_container_width=True)
-            
-            # --- PREDICTION INTERFACE ---
-            st.markdown("---")
-            st.subheader("🎯 Churn Risk Assessment")
-            st.markdown("""
-            Enter customer details below to predict churn probability. **All features are used** for accurate prediction.
-            """)
-            
-            with st.form("prediction_form"):
-                st.write("### Customer Information")
+            # Create input fields for all features
+            for i, feature in enumerate(feature_columns):
+                # Distribute across columns
+                col = [col1, col2, col3][i % 3]
                 
-                # Organize inputs into columns
-                col1, col2, col3 = st.columns(3)
-                input_data = {}
-                
-                # Get all feature names for prediction
-                feature_names = model_result['feature_names']
-                
-                # Create input fields for all features
-                for i, feature in enumerate(feature_names):
-                    # Distribute across columns
-                    col = [col1, col2, col3][i % 3]
-                    
-                    with col:
-                        if df[feature].dtype in ['int64', 'float64']:
-                            # Numerical features
-                            min_val = float(df[feature].min())
-                            max_val = float(df[feature].max())
-                            default_val = float(df[feature].median())
+                with col:
+                    if df[feature].dtype in ['int64', 'float64']:
+                        # Numerical features
+                        min_val = float(df[feature].min())
+                        max_val = float(df[feature].max())
+                        default_val = float(df[feature].median())
+                        
+                        # Adjust ranges for better UX
+                        if feature == 'Tenure':
+                            min_val, max_val = 0, 60
+                            default_val = min(12, max_val)
+                        elif feature == 'CashbackAmount':
+                            min_val, max_val = 0, 1000
+                        elif feature == 'HourSpendOnApp':
+                            min_val, max_val = 0.0, 10.0
+                        elif feature == 'SatisfactionScore':
+                            min_val, max_val = 1, 5
+                        elif feature == 'OrderCount':
+                            min_val, max_val = 0, 100
                             
-                            # Adjust ranges for better UX
-                            if feature == 'Tenure':
-                                min_val, max_val = 0, 60
-                            elif feature == 'CashbackAmount':
-                                min_val, max_val = 0, 1000
-                            elif feature == 'HourSpendOnApp':
-                                min_val, max_val = 0.0, 10.0
-                            
-                            input_data[feature] = st.slider(
-                                f"{feature}",
-                                min_val, max_val, default_val,
-                                help=f"Range: {min_val} - {max_val}"
-                            )
-                        else:
-                            # Categorical features
-                            unique_vals = df[feature].unique()
-                            input_data[feature] = st.selectbox(
-                                f"{feature}",
-                                options=unique_vals,
-                                help=f"Select from {len(unique_vals)} options"
-                            )
-                
-                submitted = st.form_submit_button("🔮 Predict Churn Risk", use_container_width=True)
-                
-                if submitted:
-                    # Prepare input data
-                    input_df = pd.DataFrame([input_data])
-                    
-                    # Encode categorical variables
-                    for col in input_df.columns:
-                        if col in model_result['label_encoders']:
-                            le = model_result['label_encoders'][col]
-                            if input_df[col].iloc[0] in le.classes_:
-                                input_df[col] = le.transform(input_df[col])
-                            else:
-                                # Use most frequent class as fallback
-                                input_df[col] = le.transform([le.classes_[0]])
-                    
-                    # Ensure correct column order and scale
-                    input_df = input_df[feature_names]
-                    input_scaled = model_result['scaler'].transform(input_df)
-                    
-                    # Make prediction
-                    churn_probability = model_result['model'].predict_proba(input_scaled)[0, 1]
-                    churn_prediction = model_result['model'].predict(input_scaled)[0]
-                    
-                    # Display results
-                    st.markdown("---")
-                    st.subheader("📋 Prediction Results")
-                    
-                    # Results in columns
-                    result_col1, result_col2, result_col3 = st.columns(3)
-                    
-                    with result_col1:
-                        st.metric(
-                            "Churn Probability", 
-                            f"{churn_probability:.1%}",
-                            delta=f"{(churn_probability-0.5)*100:+.1f}% vs baseline" if churn_probability != 0.5 else None
+                        input_data[feature] = st.slider(
+                            f"{feature}",
+                            min_val, max_val, default_val,
+                            help=f"Range in data: {df[feature].min():.1f} - {df[feature].max():.1f}"
                         )
+                    else:
+                        # Categorical features
+                        unique_vals = df[feature].unique()
+                        default_val = unique_vals[0] if len(unique_vals) > 0 else ""
+                        input_data[feature] = st.selectbox(
+                            f"{feature}",
+                            options=unique_vals,
+                            index=0,
+                            help=f"Select from {len(unique_vals)} options"
+                        )
+            
+            submitted = st.form_submit_button("🔮 Assess Churn Risk", use_container_width=True)
+            
+            if submitted:
+                # Calculate risk score
+                risk_score = calculate_risk_score(input_data, df)
+                
+                # Display results
+                st.markdown("---")
+                st.subheader("📋 Risk Assessment Results")
+                
+                # Results in columns
+                result_col1, result_col2, result_col3 = st.columns(3)
+                
+                with result_col1:
+                    st.metric(
+                        "Churn Risk Score", 
+                        f"{risk_score:.1%}",
+                        delta=f"{(risk_score-0.5)*100:+.1f}% vs neutral" if risk_score != 0.5 else None
+                    )
+                
+                with result_col2:
+                    confidence = 0.8  # Fixed confidence for rule-based system
+                    st.metric("Assessment Confidence", f"{confidence:.1%}")
+                
+                with result_col3:
+                    if risk_score > 0.7:
+                        st.error("**HIGH RISK OF CHURN** ⚠️")
+                        st.write("Immediate retention action recommended")
+                    elif risk_score > 0.4:
+                        st.warning("**MEDIUM RISK OF CHURN** 📊")
+                        st.write("Monitor closely and consider proactive engagement")
+                    else:
+                        st.success("**LOW RISK OF CHURN** ✅")
+                        st.write("Customer likely to stay")
+                
+                # Visual risk gauge
+                st.write("**Risk Level Gauge:**")
+                st.progress(float(risk_score))
+                st.caption(f"Risk score: {risk_score:.1%}")
+                
+                # Risk factors analysis
+                with st.expander("🔍 Detailed Risk Analysis"):
+                    st.write("**Key Risk Factors Identified:**")
                     
-                    with result_col2:
-                        confidence = max(churn_probability, 1-churn_probability)
-                        st.metric("Prediction Confidence", f"{confidence:.1%}")
+                    risk_factors = []
                     
-                    with result_col3:
-                        if churn_prediction == 1:
-                            st.error("**HIGH RISK OF CHURN** ⚠️")
-                            st.write("Immediate retention action recommended")
-                        else:
-                            st.success("**LOW RISK OF CHURN** ✅")
-                            st.write("Customer likely to stay")
+                    # Tenure risk
+                    if 'Tenure' in input_data:
+                        tenure_q25 = df['Tenure'].quantile(0.25) if 'Tenure' in df.columns else 12
+                        if input_data['Tenure'] < tenure_q25:
+                            risk_factors.append(f"**Low Tenure**: {input_data['Tenure']} months (below 25th percentile: {tenure_q25:.1f} months)")
                     
-                    # Visual probability gauge
-                    st.write("**Risk Level Gauge:**")
-                    st.progress(float(churn_probability))
-                    st.caption(f"Churn probability: {churn_probability:.1%}")
+                    # Satisfaction risk
+                    if 'SatisfactionScore' in input_data and input_data['SatisfactionScore'] <= 2:
+                        risk_factors.append(f"**Low Satisfaction**: Score {input_data['SatisfactionScore']} (≤ 2 indicates dissatisfaction)")
                     
-                    # Risk factors analysis
-                    with st.expander("🔍 Detailed Risk Analysis"):
-                        st.write("**Key Contributing Factors:**")
-                        
-                        # Get feature contributions
-                        feature_contributions = []
-                        for feature in feature_names:
-                            importance = feature_importance[feature_importance['Feature'] == feature]['Importance'].values[0]
-                            value = input_data[feature]
-                            avg_value = df[feature].mean() if df[feature].dtype in ['int64', 'float64'] else None
-                            
-                            if avg_value is not None:
-                                if (feature in ['Tenure', 'SatisfactionScore', 'CashbackAmount'] and value < avg_value) or \
-                                   (feature in ['Complain'] and value > 0):
-                                    feature_contributions.append((feature, importance, value, avg_value))
-                        
-                        # Sort by importance and show top 5
-                        feature_contributions.sort(key=lambda x: x[1], reverse=True)
-                        
-                        for feature, importance, value, avg_value in feature_contributions[:5]:
-                            st.write(f"- **{feature}**: {value} (avg: {avg_value:.1f}) - Impact: {importance:.3f}")
+                    # Complain risk
+                    if 'Complain' in input_data and input_data['Complain'] == 1:
+                        risk_factors.append("**Active Complaints**: Customer has registered complaints")
+                    
+                    # Cashback risk
+                    if 'CashbackAmount' in input_data:
+                        cashback_q25 = df['CashbackAmount'].quantile(0.25) if 'CashbackAmount' in df.columns else 150
+                        if input_data['CashbackAmount'] < cashback_q25:
+                            risk_factors.append(f"**Low Cashback**: ${input_data['CashbackAmount']:.1f} (below 25th percentile: ${cashback_q25:.1f})")
+                    
+                    # Order count risk
+                    if 'OrderCount' in input_data:
+                        orders_q25 = df['OrderCount'].quantile(0.25) if 'OrderCount' in df.columns else 5
+                        if input_data['OrderCount'] < orders_q25:
+                            risk_factors.append(f"**Low Order Count**: {input_data['OrderCount']} orders (below 25th percentile: {orders_q25:.1f})")
+                    
+                    # App usage risk
+                    if 'HourSpendOnApp' in input_data:
+                        hours_q25 = df['HourSpendOnApp'].quantile(0.25) if 'HourSpendOnApp' in df.columns else 1.0
+                        if input_data['HourSpendOnApp'] < hours_q25:
+                            risk_factors.append(f"**Low App Engagement**: {input_data['HourSpendOnApp']:.1f} hours (below 25th percentile: {hours_q25:.1f} hours)")
+                    
+                    if risk_factors:
+                        for factor in risk_factors:
+                            st.write(f"• 🔴 {factor}")
+                    else:
+                        st.write("• 🟢 No significant risk factors identified")
+                    
+                    st.write("---")
+                    st.write("**Recommendations:**")
+                    if risk_score > 0.7:
+                        st.write("""
+                        - **Immediate retention offers** (discounts, premium features)
+                        - **Personalized outreach** from customer success team
+                        - **Win-back campaign** with special incentives
+                        - **Root cause analysis** for dissatisfaction
+                        """)
+                    elif risk_score > 0.4:
+                        st.write("""
+                        - **Proactive engagement** through email campaigns
+                        - **Loyalty program** enrollment push
+                        - **Satisfaction survey** to identify issues
+                        - **Personalized recommendations** to increase engagement
+                        """)
+                    else:
+                        st.write("""
+                        - **Continue standard engagement** practices
+                        - **Monitor for changes** in behavior patterns
+                        - **Upsell opportunities** for loyal customers
+                        - **Referral program** enrollment
+                        """)
         
-        else:
-            st.error("❌ Model training failed. Please check your data.")
+        # --- BUSINESS INSIGHTS ---
+        st.markdown("---")
+        st.subheader("💡 Business Insights")
+        
+        insight_col1, insight_col2 = st.columns(2)
+        
+        with insight_col1:
+            st.write("**Top Churn Drivers:**")
+            insights = []
+            
+            if 'Tenure' in df.columns and 'Churn' in df.columns:
+                low_tenure_churn = df[df['Tenure'] < df['Tenure'].quantile(0.25)]['Churn'].mean() if len(df[df['Tenure'] < df['Tenure'].quantile(0.25)]) > 0 else 0
+                insights.append(f"- **New customers** (< {df['Tenure'].quantile(0.25):.1f} months): {low_tenure_churn:.1%} churn rate")
+            
+            if 'Complain' in df.columns and 'Churn' in df.columns:
+                complain_churn = df[df['Complain'] == 1]['Churn'].mean() if 1 in df['Complain'].values else 0
+                insights.append(f"- **Customers with complaints**: {complain_churn:.1%} churn rate")
+            
+            if 'SatisfactionScore' in df.columns and 'Churn' in df.columns:
+                low_sat_churn = df[df['SatisfactionScore'] <= 2]['Churn'].mean() if len(df[df['SatisfactionScore'] <= 2]) > 0 else 0
+                insights.append(f"- **Low satisfaction** (score ≤ 2): {low_sat_churn:.1%} churn rate")
+            
+            for insight in insights:
+                st.write(insight)
+        
+        with insight_col2:
+            st.write("**Retention Opportunities:**")
+            st.write("- **Onboarding program** for new customers")
+            st.write("- **Proactive complaint resolution** system")
+            st.write("- **Satisfaction improvement** campaigns")
+            st.write("- **Loyalty rewards** for engaged customers")
+            st.write("- **Personalized communication** based on usage patterns")
+
     else:
-        st.error("❌ No suitable data available for model training. Ensure dataset contains 'Churn' column.")
+        st.error("❌ No data available for risk assessment.")
 
 with tab3:
     st.header("🔍 Data Overview")
@@ -689,11 +642,11 @@ with tab3:
 
 # Footer
 st.markdown("---")
-st.markdown("**Customer Churn Analysis & Prediction Dashboard** | *Using Random Forest with all features for prediction*")
+st.markdown("**Customer Churn Analysis & Prediction Dashboard** | *Using rule-based risk assessment with all available features*")
 
 # Sidebar info
 st.sidebar.markdown("---")
 st.sidebar.write("**ℹ️ App Info**")
 st.sidebar.write(f"- Data shape: {df.shape if df is not None else 'N/A'}")
-st.sidebar.write(f"- EDA filters: {len(important_filters) if 'important_filters' in locals() else 0} active")
-st.sidebar.write("*For prediction, all features are used*")
+st.sidebar.write("*Rule-based risk assessment*")
+st.sidebar.write("*No ML dependencies required*")
