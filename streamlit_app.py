@@ -591,11 +591,6 @@ with tab2:
                 """)
 
 
-    
-    # Display best parameters
-    st.subheader("🎯 Best Hyperparameters")
-    st.json(best_params)
-    
     # Confusion Matrix
     st.subheader("📈 Confusion Matrix")
     if matplotlib_available:
@@ -657,6 +652,10 @@ with tab3:
         st.subheader("Basic Statistics")
         st.dataframe(df.describe())
     
-    
+    # --- DISPLAY RAW DATA ---
+        with st.expander("View Data"):
+            st.dataframe(df_selection)
+            st.markdown(f"**Data Dimensions:** {df_selection.shape[0]} rows, {df_selection.shape[1]} columns")
+            
 st.markdown("---")
 st.write("Customer Churn Analysis & Prediction Dashboard")
