@@ -499,7 +499,7 @@ with tab2:
                     min_val = float(df[feature].min())
                     max_val = float(df[feature].max())
                     default_val = float(df[feature].median())
-                    input_data[feature] = st.slider(
+                    input_data[feature] = st.number_input(
                         f"{feature}", 
                         min_val, max_val, default_val
                     )
@@ -518,7 +518,7 @@ with tab2:
                     min_val = float(df[feature].min())
                     max_val = float(df[feature].max())
                     default_val = float(df[feature].median())
-                    input_data[feature] = st.slider(
+                    input_data[feature] = st.st.number_input(
                         f"{feature}", 
                         min_val, max_val, default_val
                     )
@@ -652,9 +652,9 @@ with tab3:
         st.dataframe(df.describe())
     
     # --- DISPLAY RAW DATA ---
-        with st.expander("View Data"):
-            st.dataframe(df_selection)
-            st.markdown(f"**Data Dimensions:** {df_selection.shape[0]} rows, {df_selection.shape[1]} columns")
+    with st.expander("View Data"):
+        st.dataframe(df_selection)
+        st.markdown(f"**Data Dimensions:** {df_selection.shape[0]} rows, {df_selection.shape[1]} columns")
             
 st.markdown("---")
 st.write("Customer Churn Analysis & Prediction Dashboard")
