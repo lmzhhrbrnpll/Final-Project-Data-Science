@@ -518,7 +518,7 @@ with tab2:
                     min_val = float(df[feature].min())
                     max_val = float(df[feature].max())
                     default_val = float(df[feature].median())
-                    input_data[feature] = st.st.number_input(
+                    input_data[feature] = st.number_input(
                         f"{feature}", 
                         min_val, max_val, default_val
                     )
